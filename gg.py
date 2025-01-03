@@ -1,249 +1,164 @@
 import pygame
-import math
 import random
 
 pygame.init()
 
-# Constants
-FPS = 60
-WIN_WIDTH, WIN_HEIGHT = 1000, 600
-GRID_WIDTH, GRID_HEIGHT = 600, 500
-ROWS, COLS = 4, 4
+SCREEN_SIZE = 700
+GRID_SIZE = 4
+CELL_SIZE = SCREEN_SIZE // (GRID_SIZE + 1)
+PADDING = 10
 
-RECT_HEIGHT = GRID_HEIGHT // ROWS
-RECT_WIDTH = GRID_WIDTH // COLS
+COLORS = {
+    0: (205, 193, 180),
+    2: (238, 228, 218),
+    4: (237, 224, 200),
+    8: (242, 177, 121),
+    16: (245, 149, 99),
+    32: (246, 124, 95),
+    64: (246, 94, 59),
+    128: (237, 207, 114),
+    256: (237, 204, 97),
+    512: (237, 200, 80),
+    1024: (237, 197, 63),
+    2048: (237, 194, 46)
+}
 
-OUTLINE_COLOR = (187, 173, 160)
-BACKGROUND_COLOR = (205, 192, 180)
-FONT_COLOR = (119, 110, 101)
-OUTLINE_THICKNESS = 5
-
-# Center the grid
-X_OFFSET = (WIN_WIDTH - GRID_WIDTH) // 2
-Y_OFFSET = (WIN_HEIGHT - GRID_HEIGHT) // 2
-
-window = pygame.display.set_mode((WIN_WIDTH, WIN_HEIGHT))
-pygame.display.set_caption("2048")
-
-font = pygame.font.SysFont("arial", 40, bold=True)
-
-
-class Tile:
-    COLORS = {
-        2: (238, 228, 218),
-        4: (238, 225, 201),
-        8: (243, 178, 122),
-        16: (246, 150, 100),
-        32: (247, 124, 95),
-        64: (247, 95, 59),
-        128: (237, 208, 115),
-        256: (237, 204, 98),
-        512: (237, 201, 80),
-        1024: (237, 197, 63),
-        2048: (237, 194, 46)
-    }
-
-    def __init__(self, row, col, value=2):
-        self.row = row
-        self.col = col
-        self.value = value
-        self.x = X_OFFSET + col * RECT_WIDTH
-        self.y = Y_OFFSET + row * RECT_HEIGHT
-
-    def draw(self, surface):
-        color = self.COLORS.get(self.value, (237, 194, 46))
-        pygame.draw.rect(surface, color,
-                         (self.x, self.y, RECT_WIDTH, RECT_HEIGHT))
-
-        text = font.render(str(self.value), True, FONT_COLOR)
-        text_rect = text.get_rect(center=(self.x + RECT_WIDTH // 2,
-                                          self.y + RECT_HEIGHT // 2))
-        surface.blit(text, text_rect)
-
-    def move_to(self, row, col):
-        self.row = row
-        self.col = col
-        self.x = X_OFFSET + col * RECT_WIDTH
-        self.y = Y_OFFSET + row * RECT_HEIGHT
+TEXT_COLORS = {
+    2: (119, 110, 101),
+    4: (119, 110, 101)
+}
 
 
-def draw_grid():
-    window.fill(BACKGROUND_COLOR)
+class Game2048:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((SCREEN_SIZE, SCREEN_SIZE))
+        pygame.display.set_caption('2048')
+        self.font = pygame.font.SysFont('arial', 40, bold=True)
+        self.grid = [[0] * GRID_SIZE for _ in range(GRID_SIZE)]
+        self.score = 0
+        self.add_new_tile()
+        self.add_new_tile()
 
-    # Draw grid background
-    pygame.draw.rect(window, OUTLINE_COLOR,
-                     (X_OFFSET, Y_OFFSET, GRID_WIDTH, GRID_HEIGHT),
-                     OUTLINE_THICKNESS)
+    def add_new_tile(self):
+        empty_cells = [(i, j) for i in range(GRID_SIZE)
+                       for j in range(GRID_SIZE) if self.grid[i][j] == 0]
+        if empty_cells:
+            i, j = random.choice(empty_cells)
+            self.grid[i][j] = 2 if random.random() < 0.9 else 4
 
-    # Draw grid lines
-    for i in range(1, ROWS):
-        y = Y_OFFSET + i * RECT_HEIGHT
-        pygame.draw.line(window, OUTLINE_COLOR,
-                         (X_OFFSET, y),
-                         (X_OFFSET + GRID_WIDTH, y),
-                         OUTLINE_THICKNESS)
+    def draw_tile(self, x, y, value):
+        x_pos = x * CELL_SIZE + PADDING * (x + 1)
+        y_pos = y * CELL_SIZE + PADDING * (y + 1)
 
-    for i in range(1, COLS):
-        x = X_OFFSET + i * RECT_WIDTH
-        pygame.draw.line(window, OUTLINE_COLOR,
-                         (x, Y_OFFSET),
-                         (x, Y_OFFSET + GRID_HEIGHT),
-                         OUTLINE_THICKNESS)
+        pygame.draw.rect(self.screen, COLORS.get(value, COLORS[0]),
+                         (x_pos, y_pos, CELL_SIZE, CELL_SIZE),
+                         border_radius=8)
 
+        if value != 0:
+            text_color = TEXT_COLORS.get(value, (255, 255, 255))
+            text = self.font.render(str(value), True, text_color)
+            text_rect = text.get_rect(center=(x_pos + CELL_SIZE // 2,
+                                              y_pos + CELL_SIZE // 2))
+            self.screen.blit(text, text_rect)
 
-def get_empty_positions(grid):
-    empty = []
-    for row in range(ROWS):
-        for col in range(COLS):
-            if grid.get((row, col)) is None:
-                empty.append((row, col))
-    return empty
+    def draw(self):
+        self.screen.fill((187, 173, 160))
+        for y in range(GRID_SIZE):
+            for x in range(GRID_SIZE):
+                self.draw_tile(x, y, self.grid[y][x])
+        pygame.display.flip()
 
+    def move(self, direction):
+        moved = False
+        merged = [[False] * GRID_SIZE for _ in range(GRID_SIZE)]
 
-def add_new_tile(grid):
-    empty = get_empty_positions(grid)
-    if empty:
-        row, col = random.choice(empty)
-        value = 2 if random.random() < 0.9 else 4
-        grid[(row, col)] = Tile(row, col, value)
+        if direction in ['LEFT', 'RIGHT']:
+            for y in range(GRID_SIZE):
+                row = self.grid[y]
+                if direction == 'RIGHT':
+                    row = row[::-1]
 
+                # Compress
+                new_row = [x for x in row if x != 0] + [0] * row.count(0)
 
-def merge_tiles(grid, direction):
-    moved = False
-    merged = set()
-
-    if direction in ['left', 'right']:
-        row_range = range(ROWS)
-        col_range = range(COLS - 1, -1, -1) if direction == 'right' else range(COLS)
-
-        for row in row_range:
-            for col in col_range:
-                if (row, col) not in grid:
-                    continue
-
-                tile = grid[(row, col)]
-                next_col = col + (1 if direction == 'right' else -1)
-
-                while (0 <= next_col < COLS and
-                       (row, next_col) not in grid):
-                    next_col += (1 if direction == 'right' else -1)
-
-                if (0 <= next_col < COLS and
-                        (row, next_col) in grid and
-                        grid[(row, next_col)].value == tile.value and
-                        (row, next_col) not in merged):
-
-                    grid[(row, next_col)].value *= 2
-                    merged.add((row, next_col))
-                    del grid[(row, col)]
-                    moved = True
-                else:
-                    next_col = (next_col - 1 if direction == 'right'
-                                else next_col + 1)
-                    if next_col != col:
-                        grid[(row, next_col)] = tile
-                        tile.move_to(row, next_col)
-                        del grid[(row, col)]
+                # Merge
+                for x in range(len(new_row) - 1):
+                    if new_row[x] == new_row[x + 1] != 0:
+                        new_row[x] *= 2
+                        self.score += new_row[x]
+                        new_row[x + 1:] = new_row[x + 2:] + [0]
                         moved = True
 
-    else:  # up or down
-        col_range = range(COLS)
-        row_range = range(ROWS - 1, -1, -1) if direction == 'down' else range(ROWS)
-
-        for col in col_range:
-            for row in row_range:
-                if (row, col) not in grid:
-                    continue
-
-                tile = grid[(row, col)]
-                next_row = row + (1 if direction == 'down' else -1)
-
-                while (0 <= next_row < ROWS and
-                       (next_row, col) not in grid):
-                    next_row += (1 if direction == 'down' else -1)
-
-                if (0 <= next_row < ROWS and
-                        (next_row, col) in grid and
-                        grid[(next_row, col)].value == tile.value and
-                        (next_row, col) not in merged):
-
-                    grid[(next_row, col)].value *= 2
-                    merged.add((next_row, col))
-                    del grid[(row, col)]
+                if direction == 'RIGHT':
+                    new_row = new_row[::-1]
+                if new_row != row:
                     moved = True
-                else:
-                    next_row = (next_row - 1 if direction == 'down'
-                                else next_row + 1)
-                    if next_row != row:
-                        grid[(next_row, col)] = tile
-                        tile.move_to(next_row, col)
-                        del grid[(row, col)]
+                self.grid[y] = new_row
+
+        else:  # UP or DOWN
+            for x in range(GRID_SIZE):
+                col = [self.grid[y][x] for y in range(GRID_SIZE)]
+                if direction == 'DOWN':
+                    col = col[::-1]
+
+                new_col = [x for x in col if x != 0] + [0] * col.count(0)
+
+                for y in range(len(new_col) - 1):
+                    if new_col[y] == new_col[y + 1] != 0:
+                        new_col[y] *= 2
+                        self.score += new_col[y]
+                        new_col[y + 1:] = new_col[y + 2:] + [0]
                         moved = True
 
-    return moved
+                if direction == 'DOWN':
+                    new_col = new_col[::-1]
+                if new_col != col:
+                    moved = True
+                for y in range(GRID_SIZE):
+                    self.grid[y][x] = new_col[y]
 
+        if moved:
+            self.add_new_tile()
+        return moved
 
-def is_game_over(grid):
-    if len(get_empty_positions(grid)) > 0:
-        return False
+    def game_over(self):
+        if any(0 in row for row in self.grid):
+            return False
 
-    # Check for possible merges
-    for row in range(ROWS):
-        for col in range(COLS):
-            value = grid[(row, col)].value
-
-            # Check right
-            if col < COLS - 1 and grid[(row, col + 1)].value == value:
-                return False
-            # Check down
-            if row < ROWS - 1 and grid[(row + 1, col)].value == value:
-                return False
-
-    return True
+        for y in range(GRID_SIZE):
+            for x in range(GRID_SIZE):
+                value = self.grid[y][x]
+                if (x < GRID_SIZE - 1 and value == self.grid[y][x + 1]) or \
+                        (y < GRID_SIZE - 1 and value == self.grid[y + 1][x]):
+                    return False
+        return True
 
 
 def main():
-    clock = pygame.time.Clock()
-    grid = {}
-
-    # Initialize with two tiles
-    add_new_tile(grid)
-    add_new_tile(grid)
-
+    game = Game2048()
     running = True
+
     while running:
-        clock.tick(FPS)
+        game.draw()
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-
-            if event.type == pygame.KEYDOWN:
-                moved = False
-
+            elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT:
-                    moved = merge_tiles(grid, 'left')
+                    game.move('LEFT')
                 elif event.key == pygame.K_RIGHT:
-                    moved = merge_tiles(grid, 'right')
+                    game.move('RIGHT')
                 elif event.key == pygame.K_UP:
-                    moved = merge_tiles(grid, 'up')
+                    game.move('UP')
                 elif event.key == pygame.K_DOWN:
-                    moved = merge_tiles(grid, 'down')
+                    game.move('DOWN')
 
-                if moved:
-                    add_new_tile(grid)
-                    if is_game_over(grid):
-                        print("Game Over!")
-
-
-        # Draw
-        draw_grid()
-        for tile in grid.values():
-            tile.draw(window)
-        pygame.display.update()
-
-    pygame.quit()
+                if game.game_over():
+                    print(f"Game Over! Score: {game.score}")
+                    running = False
 
 
 if __name__ == "__main__":
     main()
+    pygame.quit()
